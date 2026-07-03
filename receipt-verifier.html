@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<script src="tenant-config.js"></script>
+<script id="stable-tenant-runtime-20260702">
+(function(){
+  var page = "receipt";
+  var cfg = window.NURSERY_TENANT_CONFIG || {};
+  function clean(v){ return String(v == null ? '' : v).trim(); }
+  function first(){ for (var i=0;i<arguments.length;i++){ var v=clean(arguments[i]); if(v) return v; } return ''; }
+  function svc(){ return cfg.services || {}; }
+  function fb(){ return cfg.firebase || {}; }
+  function firebaseRoot(){
+    var raw = first(svc().firebaseBaseUrl, fb().databaseURL);
+    raw = raw.replace(/\/+$/, '');
+    if (!raw) return '';
+    return /\/nursery_data$/i.test(raw) ? raw : raw + '/nursery_data';
+  }
+  function nameAr(){ return first(cfg.nameAr, cfg.nameEn, 'Nursery'); }
+  function nameEn(){ return first(cfg.nameEn, cfg.nameAr, 'Nursery'); }
+  function logo(){ return first(cfg.logoUrl, cfg.logoDataUrl); }
+  function settings(){
+    return {
+      name:nameAr(),
+      addr_ar:clean(cfg.addressAr),
+      addr_en:clean(cfg.addressEn),
+      phone:clean(cfg.phone),
+      email:clean(cfg.email),
+      refund_ar:clean(cfg.receipt && cfg.receipt.refundPolicyAr),
+      refund_en:clean(cfg.receipt && cfg.receipt.refundPolicyEn),
+      logoDataUrl:logo()
+    };
+  }
+  window.KP_STABLE_TENANT = { page:page, firebaseRoot:firebaseRoot, settings:settings };
+  function setText(sel, value){ value=clean(value); if(!value) return; document.querySelectorAll(sel).forEach(function(el){ el.textContent=value; }); }
+  function setLogo(){ var src=logo(); if(!src) return; document.querySelectorAll('img.logo,img.portalLogo,img.logoMini,img.docLogo,.hdr-brand img,#logo-preview-img').forEach(function(img){ if(img){ img.src=src; img.style.display=''; img.alt=nameEn() + ' Logo'; } }); }
+  function apply(){
+    try { if (window.NURSERY_BRANDING && window.NURSERY_BRANDING.apply) window.NURSERY_BRANDING.apply(); } catch(_e) {}
+    try { nurserySettings = Object.assign({}, nurserySettings || {}, settings()); } catch(_e2) {}
+    try { logoDataUrl = logo() || logoDataUrl || ''; } catch(_e3) {}
+    try { if (typeof LOGO_SRC !== 'undefined' && logo()) window.KP_TENANT_LOGO_SRC = logo(); } catch(_e4) {}
+    setText('.login-title,.portalNameAr', nameAr());
+    setText('.portalNameEn', nameEn());
+    setText('.footer', page === 'parent' ? nameEn() + ' Parent Portal' : '');
+    setLogo();
+    try { if (typeof updateLogoPreview === 'function') updateLogoPreview(); } catch(_e5) {}
+    try { if (typeof applySettingsToUI === 'function') applySettingsToUI(); } catch(_e6) {}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply); else apply();
+  setTimeout(apply, 100); setTimeout(apply, 800); setTimeout(apply, 1800); setTimeout(apply, 3500);
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2a8b54">
+<title>التحقق من الإيصال | Kids Park Nursery</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&family=Marhey:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--g1:#2a8b54;--g2:#3eb377;--r1:#d63a3a;--y1:#f5b400;--bg:#f0f7fa;--text:#24372a;--muted:#6b8470;--border:#cce8d6;--white:#fff;--display:'Marhey','Tajawal',sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Tajawal',sans-serif;min-height:100vh;color:var(--text);background:radial-gradient(circle at 10% 10%,#fff4d6 0,transparent 25%),radial-gradient(circle at 90% 20%,#d6efff 0,transparent 25%),linear-gradient(135deg,#f0f7fa,#e7f4f7);display:flex;align-items:center;justify-content:center;padding:18px}
+.card{width:min(720px,100%);background:#fff;border-radius:24px;box-shadow:0 18px 60px rgba(46,139,84,.18);overflow:hidden;border:2px solid #fff}
+.hd{background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;padding:20px;text-align:center}
+.hd h1{font-family:var(--display);font-size:24px;margin-bottom:6px}.hd p{opacity:.9;font-size:14px}
+.body{padding:22px}.status{border-radius:18px;padding:16px;text-align:center;margin-bottom:16px;font-weight:900;font-size:18px;border:2px solid var(--border);background:#fbfdfb}.status.ok{background:#e8f9ee;color:#0e6b35;border-color:#bee5cd}.status.err{background:#ffe8e8;color:#a82323;border-color:#ffc7c2}.status.warn{background:#fffbe7;color:#8a5c00;border-color:#ffe49b}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.item{background:#fbfdfb;border:1.5px solid #eef4ee;border-radius:14px;padding:12px}.lbl{font-size:12px;color:var(--muted);font-weight:800;margin-bottom:4px}.val{font-size:15px;font-weight:900;word-break:break-word}.full{grid-column:1/-1}.foot{padding:14px 22px;border-top:1px solid #eef4ee;background:#fbfdfb;font-size:12px;color:var(--muted);line-height:1.7;text-align:center}.loader{width:34px;height:34px;border:4px solid #d9efe1;border-top-color:var(--g1);border-radius:50%;animation:spin 1s linear infinite;margin:10px auto}@keyframes spin{to{transform:rotate(360deg)}}
+.btn{display:inline-flex;margin-top:14px;padding:10px 16px;border-radius:14px;border:0;background:linear-gradient(135deg,var(--g2),var(--g1));color:#fff;font-family:'Tajawal';font-weight:900;text-decoration:none;box-shadow:0 4px 0 rgba(0,0,0,.12)}
+@media(max-width:560px){.grid{grid-template-columns:1fr}.body{padding:16px}.hd h1{font-size:20px}}
+</style>
+</head>
+<body data-tenant-page="receipt">
+<div class="card">
+  <div class="hd"><h1>التحقق من الإيصال</h1><p>Kids Park Nursery Receipt Verification</p></div>
+  <div class="body" id="app"><div class="status warn"><div class="loader"></div>جاري التحقق من الإيصال...</div></div>
+  <div class="foot">هذه الصفحة تتحقق من بيانات الإيصال مباشرة من قاعدة بيانات الحضانة. This page verifies the receipt directly from the nursery database.</div>
+</div>
+<script>
+const FB_URL = ((window.KP_STABLE_TENANT && window.KP_STABLE_TENANT.firebaseRoot && window.KP_STABLE_TENANT.firebaseRoot()) || '');
+const qs = new URLSearchParams(location.search);
+const rid = (qs.get('rid') || qs.get('receipt') || '').trim();
+const code = (qs.get('code') || '').trim();
+const app = document.getElementById('app');
+
+function esc(v){return String(v ?? '').replace(/[&<>'"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[s]));}
+function money(v){const n=Number(v||0);return isFinite(n)?n.toLocaleString('en-US')+' د.إ':esc(v)+' د.إ';}
+function getReceiptVerificationCode(p){
+  if(!p) return 'KP-UNKNOWN';
+  const raw = [p.id || '', p.date || '', p.amt || '', p.who || ''].join('|');
+  let hash = 0;
+  for (let i = 0; i < raw.length; i++) { hash = ((hash << 5) - hash) + raw.charCodeAt(i); hash |= 0; }
+  const suffix = Math.abs(hash).toString(36).toUpperCase().slice(0, 6).padStart(6, '0');
+  return 'KP-' + (p.id || '0000') + '-' + suffix;
+}
+function valuesFromAny(x){
+  if(!x) return [];
+  if(Array.isArray(x)) return x.filter(Boolean);
+  if(typeof x === 'object') return Object.keys(x).map(k => Object.assign({firebaseKey:k}, x[k])).filter(Boolean);
+  return [];
+}
+function render(status, cls, html){app.innerHTML = `<div class="status ${cls}">${status}</div>${html||''}`;}
+async function verify(){
+  if(!rid || !code){
+    render('تعذر التحقق', 'err', '<p style="text-align:center;line-height:1.8">الرابط ناقص. يرجى مسح QR الموجود على الإيصال من جديد.</p>');
+    return;
+  }
+  try{
+    const res = await fetch(FB_URL + '/payments.json', {cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const payments = valuesFromAny(await res.json());
+    const p = payments.find(x => String(x && x.id) === String(rid));
+    if(!p){
+      render('الإيصال غير موجود', 'err', `<p style="text-align:center;line-height:1.8">لم يتم العثور على إيصال رقم <b>${esc(rid)}</b> في قاعدة البيانات.</p>`);
+      return;
+    }
+    const expected = getReceiptVerificationCode(p);
+    if(expected !== code){
+      render('رمز التحقق غير مطابق', 'err', `<p style="text-align:center;line-height:1.8">قد يكون الرابط غير صحيح أو تم تعديل بيانات الإيصال بعد إنشائه.</p><div class="grid"><div class="item full"><div class="lbl">رقم الإيصال</div><div class="val">${esc(rid)}</div></div></div>`);
+      return;
+    }
+    const deleted = p.deleted || p.isDeleted || p.status === 'deleted' || p.voided || p.cancelled || p.canceled;
+    const cls = deleted ? 'warn' : 'ok';
+    const title = deleted ? 'الإيصال موجود لكنه ملغى/محذوف' : 'الإيصال صحيح ومعتمد';
+    render(title, cls, `<div class="grid">
+      <div class="item"><div class="lbl">رقم الإيصال</div><div class="val">${esc(p.id)}</div></div>
+      <div class="item"><div class="lbl">رقم التحقق</div><div class="val" dir="ltr">${esc(code)}</div></div>
+      <div class="item"><div class="lbl">التاريخ</div><div class="val">${esc(p.date || '—')}</div></div>
+      <div class="item"><div class="lbl">المبلغ</div><div class="val">${money(p.amt)}</div></div>
+      <div class="item full"><div class="lbl">المستلم من</div><div class="val">${esc(p.who || '—')}</div></div>
+      <div class="item full"><div class="lbl">البيان</div><div class="val">${esc(p.desc || '—')}</div></div>
+      <div class="item"><div class="lbl">طريقة الدفع</div><div class="val">${esc(p.method || '—')}</div></div>
+      <div class="item"><div class="lbl">المستلم</div><div class="val">${esc(p.rcvr || '—')}</div></div>
+    </div>`);
+  }catch(err){
+    render('تعذر الاتصال بقاعدة البيانات', 'err', '<p style="text-align:center;line-height:1.8">تأكد من الإنترنت أو صلاحيات قراءة Firebase ثم حاول مرة أخرى.</p><p style="text-align:center;color:#888;margin-top:8px" dir="ltr">'+esc(err.message)+'</p>');
+  }
+}
+verify();
+</script>
+</body>
+</html>
