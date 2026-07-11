@@ -19718,7 +19718,8 @@ function kpEvalBuildFormHTML(form, student, editable, savedData, quarterId, lock
         var monthClass = 'kp-eval-month-' + (m + 1);
         var cellClass = 'kp-eval-radio ' + monthClass + (monthLocked ? ' kp-eval-month-locked' : '');
         for (var lvl = 0; lvl < 3; lvl++){
-          var name = 'eval-r-' + rowIdx + '-' + m;
+          var baseName = 'eval-r-' + rowIdx + '-' + m;
+          var name = baseName + (editable ? '' : '-table');
           var checked = '';
           if (savedData && savedData.skills) {
             var v = savedData.skills[String(rowIdx)];
@@ -19738,7 +19739,8 @@ function kpEvalBuildFormHTML(form, student, editable, savedData, quarterId, lock
         var cmDisabled = (!editable) || cmLocked;
         var cmDis = cmDisabled ? 'disabled' : '';
         var cmClass = 'kp-eval-month-' + (cm + 1) + (cmLocked ? ' kp-eval-month-locked' : '');
-        var cmName = 'eval-r-' + rowIdx + '-' + cm;
+        var cmBaseName = 'eval-r-' + rowIdx + '-' + cm;
+        var cmName = cmBaseName + (editable ? '' : '-card');
         var lockMark = cmLocked ? ' 🔒' : '';
         var optsHtml = '';
         for (var clvl = 0; clvl < 3; clvl++){
