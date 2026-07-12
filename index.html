@@ -1070,7 +1070,7 @@ textarea{resize:vertical;min-height:70px}
 .kp-sync-card.warn .kp-sync-value{color:#8a5c00}
 .kp-sync-card.err{border-color:#ffc7c2;background:linear-gradient(135deg,#fff,#fff0ef)}
 .kp-sync-card.err .kp-sync-value{color:#a82323}
-.kp-toast-stack{position:fixed;left:14px;bottom:14px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:min(380px,calc(100vw - 28px));pointer-events:none}
+.kp-toast-stack{position:fixed;left:50%!important;right:auto!important;top:16px!important;bottom:auto!important;transform:translateX(-50%)!important;z-index:9999;display:flex;flex-direction:column;align-items:center;gap:8px;max-width:min(520px,calc(100vw - 28px));pointer-events:none}
 .kp-toast{background:linear-gradient(135deg,rgba(46,139,84,.96),rgba(30,107,63,.96));color:#fff;padding:10px 15px;border-radius:16px;font-family:Tajawal,sans-serif;font-size:13px;font-weight:900;box-shadow:0 8px 26px rgba(46,139,84,.32);border:2px solid rgba(255,255,255,.32);opacity:0;transform:translateY(10px);transition:all .25s ease;line-height:1.45}
 .kp-toast.on{opacity:1;transform:translateY(0)}
 .kp-toast.err{background:linear-gradient(135deg,rgba(214,58,58,.96),rgba(160,35,35,.96))}
@@ -1098,7 +1098,7 @@ textarea{resize:vertical;min-height:70px}
   .card{padding:15px!important;border-radius:18px!important;margin-bottom:12px!important}
   .pt{font-size:18px!important;margin-bottom:14px!important}.ct{font-size:15px!important}
   .form-req-card,.ren-row{align-items:flex-start;flex-wrap:wrap}.form-req-actions,.ren-actions{width:100%;flex-direction:row;justify-content:flex-start}.btn{padding:8px 12px;font-size:12.5px}.sbar input,.sbar select{max-width:100%;width:100%}
-  .kp-toast-stack{left:10px;right:10px;bottom:10px;max-width:none}.kp-toast{font-size:12.5px;padding:9px 12px}
+  .kp-toast-stack{left:50%!important;right:auto!important;top:10px!important;bottom:auto!important;transform:translateX(-50%)!important;width:calc(100vw - 20px);max-width:none;align-items:center}.kp-toast{font-size:12.5px;padding:9px 12px}
 }
 
 
@@ -1266,8 +1266,17 @@ html{max-width:100%;overflow-x:hidden}body{max-width:100%}
   .sbar input,.sbar select,.sbar .btn{width:100%!important;max-width:100%!important}
 
   /* الرسائل العائمة لا تغطي الشاشة بالكامل */
-  .kp-toast-stack{left:10px!important;right:10px!important;bottom:12px!important;max-width:none!important;align-items:stretch!important}
+  .kp-toast-stack{left:50%!important;right:auto!important;top:10px!important;bottom:auto!important;transform:translateX(-50%)!important;width:calc(100vw - 20px)!important;max-width:none!important;align-items:center!important}
   .kp-toast{font-size:12.5px!important;padding:9px 12px!important;border-radius:14px!important;text-align:center!important}
+}
+
+#kp-inline-notify{
+  left:50%!important;
+  right:auto!important;
+  top:20px!important;
+  bottom:auto!important;
+  transform:translateX(-50%)!important;
+  text-align:center!important;
 }
 
 @media(min-width:761px){
@@ -3254,6 +3263,102 @@ async function getSafeNextReceiptIdRemoteAware() {
   let candidate = 1;
   usedIds.forEach(function(id){ if (id >= candidate) candidate = id + 1; });
   return candidate;
+}
+
+function kpReceiptSerialNumber(value) {
+  if (value == null || value === '') return 0;
+  const cleaned = String(value).replace(/[^0-9]/g, '');
+  const id = parseInt(cleaned, 10);
+  return Number.isFinite(id) && id > 0 ? id : 0;
+}
+
+function kpReceiptCandidateValues(record) {
+  if (record == null) return [];
+  if (typeof record !== 'object') return [record];
+  return [
+    record.id,
+    record.receiptNo,
+    record.receiptNumber,
+    record.receiptId,
+    record.serial,
+    record.serialNumber,
+    record.number,
+    record.payId,
+    record.paymentId,
+    record.invoiceNo,
+    record.invoiceNumber
+  ];
+}
+
+function kpAddUsedReceiptIds(section, usedIds) {
+  if (!section) return;
+  if (Array.isArray(section)) {
+    section.forEach(function(record) {
+      kpReceiptCandidateValues(record).forEach(function(value) {
+        const id = kpReceiptSerialNumber(value);
+        if (id) usedIds.add(id);
+      });
+    });
+    return;
+  }
+  if (typeof section === 'object') {
+    Object.keys(section).forEach(function(key) {
+      const keyId = kpReceiptSerialNumber(key);
+      if (keyId) usedIds.add(keyId);
+      kpReceiptCandidateValues(section[key]).forEach(function(value) {
+        const id = kpReceiptSerialNumber(value);
+        if (id) usedIds.add(id);
+      });
+    });
+  }
+}
+
+function kpNextReceiptFromUsedIds(usedIds) {
+  let candidate = 1;
+  usedIds.forEach(function(id){ if (id >= candidate) candidate = id + 1; });
+  while (usedIds.has(candidate)) candidate++;
+  return candidate;
+}
+
+function kpCollectUsedReceiptIds() {
+  const usedIds = new Set();
+  kpAddUsedReceiptIds(typeof payments !== 'undefined' ? payments : [], usedIds);
+  kpAddUsedReceiptIds(typeof deletedPayments !== 'undefined' ? deletedPayments : [], usedIds);
+  if (typeof tombstones !== 'undefined' && tombstones) kpAddUsedReceiptIds(tombstones.payments, usedIds);
+  try {
+    kpAddUsedReceiptIds(JSON.parse(localStorage.getItem('kp_payments_data') || '[]'), usedIds);
+    kpAddUsedReceiptIds(JSON.parse(localStorage.getItem('kp_deleted_payments') || '[]'), usedIds);
+    const localTs = JSON.parse(localStorage.getItem('kp_tombstones') || '{}');
+    kpAddUsedReceiptIds(localTs && localTs.payments, usedIds);
+  } catch(_) {}
+  return usedIds;
+}
+
+function kpReceiptIdExists(id) {
+  const serial = kpReceiptSerialNumber(id);
+  return !!serial && kpCollectUsedReceiptIds().has(serial);
+}
+
+function getSafeNextReceiptId() {
+  return kpNextReceiptFromUsedIds(kpCollectUsedReceiptIds());
+}
+
+async function getSafeNextReceiptIdRemoteAware() {
+  const usedIds = kpCollectUsedReceiptIds();
+  try {
+    const base = String(typeof FB_URL !== 'undefined' ? FB_URL : '').replace(/\/$/, '');
+    if (base) {
+      const sections = await Promise.all([
+        fetch(base + '/payments.json?receiptSerial=' + Date.now(), { cache: 'no-store' }),
+        fetch(base + '/deletedPayments.json?receiptSerial=' + Date.now(), { cache: 'no-store' }),
+        fetch(base + '/tombstones/payments.json?receiptSerial=' + Date.now(), { cache: 'no-store' })
+      ]);
+      for (const res of sections) {
+        if (res && res.ok) kpAddUsedReceiptIds(await res.json(), usedIds);
+      }
+    }
+  } catch(_) {}
+  return kpNextReceiptFromUsedIds(usedIds);
 }
 
 function getSafeNextExpenseId(){
@@ -6921,8 +7026,17 @@ function openAddPay(){
   });
   const info = document.getElementById('np-stuinfo');
   if (info) info.style.display = 'none';
-  document.getElementById('np-id').value = nextPayId;
-  document.getElementById('np-id').disabled = !(currentUser && currentUser.role === 'admin');
+  const receiptIdEl = document.getElementById('np-id');
+  if (receiptIdEl) {
+    receiptIdEl.value = getSafeNextReceiptId();
+    receiptIdEl.disabled = true;
+    getSafeNextReceiptIdRemoteAware().then(function(id){
+      if (!editingPayId && receiptIdEl) {
+        nextPayId = id;
+        receiptIdEl.value = id;
+      }
+    }).catch(function(){});
+  }
   const amtWordsEl = document.getElementById('np-amtwords');
   if (amtWordsEl) amtWordsEl.disabled = !(currentUser && currentUser.role === 'admin');
   document.getElementById('mo-pay-title').textContent = '💰 تسجيل دفعة جديدة';
@@ -7043,11 +7157,9 @@ async function savePayment(){
   } else {
     // ✅ FIX: استخدم الرقم الآمن مع فحص remote حتى ما يصير تعارض مع رقم محذوف
     let newId = await getSafeNextReceiptIdRemoteAware();
-    if (currentUser && currentUser.role === 'admin') {
-      const requestedId = parseInt(idInput && idInput.value);
-      if (requestedId) newId = requestedId;
-    }
-    if (payments.some(function(x){ return x.id === newId; })) { alert('رقم الإيصال مستخدم مسبقاً'); return; }
+    while (kpReceiptIdExists(newId)) newId++;
+    if (idInput) idInput.value = newId;
+    if (payments.some(function(x){ return kpReceiptSerialNumber(x && x.id) === newId; })) { alert('رقم الإيصال مستخدم مسبقاً'); return; }
 
     const stuid = parseInt((document.getElementById('np-stuid')||{}).value) || null;
     const p = {
@@ -20328,6 +20440,37 @@ function ensureEvalViewModal(){
   document.body.appendChild(temp.firstChild);
 }
 
+function kpEvalBuildReadonlyFormHTML(form, student, evaluation){
+  var e = evaluation || {};
+  var temp = document.createElement('div');
+  temp.innerHTML = kpEvalBuildFormHTML(form, student, /*editable*/ false, /*data*/ e, e.quarter, null, e.academicYear);
+
+  try {
+    if (e && e.skills) {
+      Object.keys(e.skills).forEach(function(rowKey){
+        var vals = e.skills[rowKey] || [];
+        for (var mm = 0; mm < 3; mm++) {
+          var vv = vals[mm];
+          if (vv === undefined || vv === null || vv === '') continue;
+          var numeric = Number(vv);
+          if (isNaN(numeric)) continue;
+          temp.querySelectorAll('input[name="eval-r-' + rowKey + '-' + mm + '"]').forEach(function(inp){
+            if (Number(inp.value) === numeric) {
+              inp.checked = true;
+              inp.setAttribute('checked', 'checked');
+            } else {
+              inp.checked = false;
+              inp.removeAttribute('checked');
+            }
+          });
+        }
+      });
+    }
+  } catch(_e) {}
+
+  return temp.innerHTML;
+}
+
 window.kpEvalOpenView = function(id){
   ensureEvalViewModal();
   var e = (window.evaluations||[]).find(function(x){ return x.id === id; });
@@ -20335,7 +20478,7 @@ window.kpEvalOpenView = function(id){
   var stu = (typeof students !== 'undefined' ? students : []).find(function(x){ return String(x.id) === String(e.studentId); }) || { id: e.studentId, name: e.studentName };
   var form = KP_FORMS[e.formId] || KP_FORM_AR;
   var body = document.getElementById('mo-eval-view-body');
-  body.innerHTML = kpEvalBuildFormHTML(form, stu, /*editable*/ false, /*data*/ e, e.quarter, null, e.academicYear);
+  body.innerHTML = kpEvalBuildReadonlyFormHTML(form, stu, e);
   // If approved, render the digital stamp(s) into the manager-signature slots,
   // but ONLY for months that were actually evaluated.
   if (e.status === 'approved' && e.stampDataUrl) {
@@ -20402,7 +20545,7 @@ async function kpEvalOpenPrintWindow(id, mode){
   var docLang = isAr ? 'ar' : 'en';
 
   // Build the form HTML. Pass the current data in as a read-only render.
-  var formHtml = kpEvalBuildFormHTML(form, stu, /*editable*/ false, /*data*/ e, e.quarter, null, e.academicYear);
+  var formHtml = kpEvalBuildReadonlyFormHTML(form, stu, e);
 
   // If approved, inject the digital stamp into the months that were evaluated.
   // We do this in a temporary DIV so we can use querySelector.
@@ -24637,27 +24780,13 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   function ensureRestoreTab(){
     var tab = document.getElementById('kp-section-loader-restore');
-    if (tab) return tab;
-    if (!document.body) return null;
-    tab = document.createElement('button');
-    tab.id = 'kp-section-loader-restore';
-    tab.type = 'button';
-    tab.textContent = 'مراقبة Firebase';
-    tab.onclick = function(){ window.kpSectionLoaderIndicator('open'); };
-    tab.style.cssText = 'position:fixed;left:14px;bottom:14px;z-index:99999;border:1px solid #27ae60;background:#ffffff;color:#165b35;border-radius:999px;padding:8px 12px;font-family:Tajawal,Arial,sans-serif;font-size:12px;font-weight:900;box-shadow:0 6px 18px rgba(0,0,0,.12);cursor:pointer;display:none';
-    document.body.appendChild(tab);
-    return tab;
+    if (tab && tab.parentNode) tab.parentNode.removeChild(tab);
+    return null;
   }
   function ensureIndicator(){
-    if (document.getElementById('kp-section-loader-indicator')) return document.getElementById('kp-section-loader-indicator');
-    if (!document.body) return null;
-    var el = document.createElement('div');
-    el.id = 'kp-section-loader-indicator';
-    el.dir = 'rtl';
-    el.style.cssText = 'position:fixed;left:14px;bottom:14px;z-index:99999;background:#ffffff;border:1px solid #b7e4c7;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.12);padding:8px 10px;min-width:260px;max-width:360px;font-family:Tajawal,Arial,sans-serif;font-size:12px;color:#165b35;line-height:1.55;opacity:.96';
-    document.body.appendChild(el);
-    ensureRestoreTab();
-    return el;
+    var el = document.getElementById('kp-section-loader-indicator');
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+    return null;
   }
   function updateIndicator(phase, path){
     if (phase) stats.currentPhase = phase;
@@ -25026,14 +25155,9 @@ document.addEventListener('DOMContentLoaded', function(){
   window.kpLoadSectionsForPage = loadSectionsForPage;
   window.kpLoadNotificationBadgeSections = loadNotificationBadgeSections;
   window.kpSectionLoaderIndicator = function(show){
-    if (show === false) show = 'hidden';
-    if (show === true || !show) show = 'open';
-    setIndicatorState(show);
-    var el = ensureIndicator();
-    var tab = ensureRestoreTab();
-    if (el) el.style.display = show === 'hidden' ? 'none' : 'block';
-    if (tab) tab.style.display = show === 'hidden' ? 'block' : 'none';
-    updateIndicator(stats.currentPhase, stats.currentSection);
+    setIndicatorState('hidden');
+    ensureIndicator();
+    ensureRestoreTab();
     return true;
   };
   window.kpNotifyFirebaseSectionLoad = updateIndicator;
@@ -25758,7 +25882,7 @@ document.addEventListener('DOMContentLoaded', function(){
     if (old && old.parentNode) old.parentNode.removeChild(old);
     var el = document.createElement('div');
     el.id = 'kp-inline-notify';
-    el.style.cssText = 'position:fixed;right:24px;bottom:24px;z-index:99998;max-width:min(420px,calc(100vw - 40px));background:#ffffff;border:2px solid #b9e5c8;border-right:8px solid #2d8f56;border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.18);padding:12px 16px;font-family:Tajawal,Arial,sans-serif;direction:rtl;color:#174d31;font-weight:900;line-height:1.6';
+    el.style.cssText = 'position:fixed;left:50%;top:20px;transform:translateX(-50%);z-index:99998;max-width:min(520px,calc(100vw - 40px));background:#ffffff;border:2px solid #b9e5c8;border-right:8px solid #2d8f56;border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.18);padding:12px 16px;font-family:Tajawal,Arial,sans-serif;direction:rtl;color:#174d31;font-weight:900;line-height:1.6;text-align:center';
     if (type === 'warn') el.style.borderRightColor = '#f39c12';
     if (type === 'error') el.style.borderRightColor = '#e74c3c';
     el.innerHTML = '<div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:18px">' + (type === 'error' ? '⚠️' : '✅') + '</span><div>' + esc(message) + '</div></div>';
@@ -26521,6 +26645,18 @@ document.addEventListener('DOMContentLoaded', function(){
 
   function installIdOptimizers(){
     window.getSafeNextReceiptIdRemoteAware = async function(){
+      if (typeof kpCollectUsedReceiptIds === 'function' && typeof kpAddUsedReceiptIds === 'function' && typeof kpNextReceiptFromUsedIds === 'function') {
+        var used = kpCollectUsedReceiptIds();
+        var results = await Promise.all([
+          fetchSection('payments', null),
+          fetchSection('deletedPayments', null),
+          fetchSection('tombstones/payments', null)
+        ]);
+        kpAddUsedReceiptIds(results[0], used);
+        kpAddUsedReceiptIds(results[1], used);
+        kpAddUsedReceiptIds(results[2], used);
+        return kpNextReceiptFromUsedIds(used);
+      }
       return remoteIdsFor('payments', 'deletedPayments', 'tombstones/payments', window.payments || (typeof payments !== 'undefined' ? payments : []), window.deletedPayments || (typeof deletedPayments !== 'undefined' ? deletedPayments : []), 1);
     };
     try { getSafeNextReceiptIdRemoteAware = window.getSafeNextReceiptIdRemoteAware; } catch(_e) {}
