@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <script src="tenant-config.js"></script>
@@ -19645,10 +19645,34 @@ function kpEvalFindExistingRecord(stuId, quarter, langOrFormId, year){
 }
 
 function kpEvalHasSavedRadioValue(value, expectedLevel){
-  if (value === null || value === undefined || value === '') return false;
-  if (typeof value === 'string' && value.trim() === '') return false;
-  var n = Number(value);
-  return !isNaN(n) && n === expectedLevel;
+  var n = kpEvalRadioValue(value);
+  return n !== '' && n === expectedLevel;
+}
+
+function kpEvalRadioValue(value){
+  if (value === null || value === undefined || value === '') return '';
+  if (typeof value === 'string' && value.trim() === '') return '';
+  if (!isNaN(Number(value))) return Number(value);
+  var x = String(value).trim().toLowerCase();
+  if (['mastered','fluent','done','yes','اتقن','أتقن'].indexOf(x) !== -1) return 0;
+  if (['partial','partly','partly fluent','اتقن جزئيا','اتقن جزئياً','أتقن جزئيا','أتقن جزئياً'].indexOf(x) !== -1) return 1;
+  if (['not','not mastered','not fluent','no','لم يتقن'].indexOf(x) !== -1) return 2;
+  return '';
+}
+function kpEvalNormalizeForReadonlyRender(e){
+  var normalized = Object.assign({}, e || {});
+    if (printEval && printEval.skills) {
+    normalized.skills = {};
+      Object.keys(printEval.skills).forEach(function(rowKey){
+      var vals = Array.isArray(e.skills[rowKey]) ? e.skills[rowKey] : [];
+      normalized.skills[rowKey] = [
+        kpEvalRadioValue(vals[0]),
+        kpEvalRadioValue(vals[1]),
+        kpEvalRadioValue(vals[2])
+      ];
+    });
+  }
+  return normalized;
 }
 
 function kpEvalBuildFormHTML(form, student, editable, savedData, quarterId, lockedMonths, academicYear){
@@ -20343,15 +20367,20 @@ function kpEvalSyncRenderedAnswersForPreview(container, rec){
     var vals = rec.skills[rowKey] || [];
     for (var mm = 0; mm < 3; mm++) {
       var vv = vals[mm];
-      if (vv === undefined || vv === null || vv === '') continue;
-      if (typeof vv === 'string' && vv.trim() === '') continue;
-      var n = Number(vv);
-      if (!isFinite(n)) continue;
+      var n = kpEvalRadioValue(vv);
+      if (n === '') continue;
       var selector = 'input[name="eval-r-' + rowKey + '-' + mm + '"][value="' + n + '"]';
       var radios = container.querySelectorAll(selector);
       for (var ri = 0; ri < radios.length; ri++) {
         radios[ri].checked = true;
         radios[ri].setAttribute('checked', 'checked');
+      }
+      var tableSelector = 'input[name="eval-r-' + rowKey + '-' + mm + '-table"][value="' + n + '"],'
+        + 'input[name="eval-r-' + rowKey + '-' + mm + '-card"][value="' + n + '"]';
+      var suffixedRadios = container.querySelectorAll(tableSelector);
+      for (var si = 0; si < suffixedRadios.length; si++) {
+        suffixedRadios[si].checked = true;
+        suffixedRadios[si].setAttribute('checked', 'checked');
       }
     }
   });
@@ -20360,11 +20389,12 @@ window.kpEvalOpenView = function(id){
   ensureEvalViewModal();
   var e = (window.evaluations||[]).find(function(x){ return x.id === id; });
   if (!e) { alert('السجل غير موجود'); return; }
+  var viewEval = kpEvalNormalizeForReadonlyRender(e);
   var stu = (typeof students !== 'undefined' ? students : []).find(function(x){ return String(x.id) === String(e.studentId); }) || { id: e.studentId, name: e.studentName };
   var form = KP_FORMS[e.formId] || KP_FORM_AR;
   var body = document.getElementById('mo-eval-view-body');
-  body.innerHTML = kpEvalBuildFormHTML(form, stu, /*editable*/ false, /*data*/ e, e.quarter, null, e.academicYear);
-  try { kpEvalSyncRenderedAnswersForPreview(body, e); } catch(_evalViewSyncErr) {}
+  body.innerHTML = kpEvalBuildFormHTML(form, stu, /*editable*/ false, /*data*/ viewEval, viewEval.quarter, null, viewEval.academicYear);
+  try { kpEvalSyncRenderedAnswersForPreview(body, viewEval); } catch(_evalViewSyncErr) {}
   // If approved, render the digital stamp(s) into the manager-signature slots,
   // but ONLY for months that were actually evaluated.
   if (e.status === 'approved' && e.stampDataUrl) {
@@ -20379,7 +20409,7 @@ window.kpEvalOpenView = function(id){
       ? e.submittedMonths
       : (Array.isArray(e.evaluatedMonths) && e.evaluatedMonths.length === 3)
         ? e.evaluatedMonths
-        : kpEvalComputeEvaluatedMonths(e);
+        : kpEvalComputeEvaluatedMonths(viewEval);
     ['eval-stamp-1','eval-stamp-2','eval-stamp-3'].forEach(function(slotId, idx){
       var slot = body.querySelector('#' + slotId);
       if (!slot) return;
@@ -20412,6 +20442,7 @@ window.kpEvalPrintForm = async function(id){ return kpEvalOpenPrintWindow(id, 'p
 async function kpEvalOpenPrintWindow(id, mode){
   var e = (window.evaluations||[]).find(function(x){ return x.id === id; });
   if (!e) { alert('السجل غير موجود'); return; }
+  var printEval = kpEvalNormalizeForReadonlyRender(e);
   var stu = (typeof students !== 'undefined' ? students : []).find(function(x){ return String(x.id) === String(e.studentId); }) || { id: e.studentId, name: e.studentName };
   var form = KP_FORMS[e.formId] || KP_FORM_AR;
 
@@ -20431,7 +20462,7 @@ async function kpEvalOpenPrintWindow(id, mode){
   var docLang = isAr ? 'ar' : 'en';
 
   // Build the form HTML. Pass the current data in as a read-only render.
-  var formHtml = kpEvalBuildFormHTML(form, stu, /*editable*/ false, /*data*/ e, e.quarter, null, e.academicYear);
+  var formHtml = kpEvalBuildFormHTML(form, stu, /*editable*/ false, /*data*/ printEval, printEval.quarter, null, printEval.academicYear);
 
   // If approved, inject the digital stamp into the months that were evaluated.
   // We do this in a temporary DIV so we can use querySelector.
@@ -20448,13 +20479,15 @@ async function kpEvalOpenPrintWindow(id, mode){
   try {
     var cardsForPrint = temp.querySelector('.kp-eval-cards');
     if (cardsForPrint && cardsForPrint.parentNode) cardsForPrint.parentNode.removeChild(cardsForPrint);
-    if (e && e.skills) {
-      Object.keys(e.skills).forEach(function(rowKey){
-        var vals = e.skills[rowKey] || [];
+    if (printEval && printEval.skills) {
+      Object.keys(printEval.skills).forEach(function(rowKey){
+        var vals = printEval.skills[rowKey] || [];
         for (var mm = 0; mm < 3; mm++) {
           var vv = vals[mm];
-          if (vv === undefined || vv === null || vv === '') continue;
-          var selector = 'table.kp-eval-table input[name="eval-r-' + rowKey + '-' + mm + '"][value="' + Number(vv) + '"]';
+          var numeric = kpEvalRadioValue(vv);
+          if (numeric === '') continue;
+          var selector = 'table.kp-eval-table input[name="eval-r-' + rowKey + '-' + mm + '-table"][value="' + numeric + '"],'
+            + 'table.kp-eval-table input[name="eval-r-' + rowKey + '-' + mm + '"][value="' + numeric + '"]';
           var inp = temp.querySelector(selector);
           if (inp) {
             inp.checked = true;
@@ -20474,7 +20507,7 @@ async function kpEvalOpenPrintWindow(id, mode){
       ? e.submittedMonths
       : (Array.isArray(e.evaluatedMonths) && e.evaluatedMonths.length === 3)
         ? e.evaluatedMonths
-        : kpEvalComputeEvaluatedMonths(e);
+        : kpEvalComputeEvaluatedMonths(printEval);
     ['eval-stamp-1','eval-stamp-2','eval-stamp-3'].forEach(function(slotId, idx){
       var slot = temp.querySelector('#' + slotId);
       if (!slot) return;
@@ -27878,3 +27911,8 @@ document.addEventListener('DOMContentLoaded', function(){
   window.kpSetParentAccessFields = setFields;
 })();
 </script>
+
+
+
+
+
