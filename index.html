@@ -20368,20 +20368,26 @@ function kpEvalSyncRenderedAnswersForPreview(container, rec){
     for (var mm = 0; mm < 3; mm++) {
       var vv = vals[mm];
       var n = kpEvalRadioValue(vv);
-      if (n === '') continue;
-      var selector = 'input[name="eval-r-' + rowKey + '-' + mm + '"][value="' + n + '"]';
-      var radios = container.querySelectorAll(selector);
-      for (var ri = 0; ri < radios.length; ri++) {
-        radios[ri].checked = true;
-        radios[ri].setAttribute('checked', 'checked');
-      }
-      var tableSelector = 'input[name="eval-r-' + rowKey + '-' + mm + '-table"][value="' + n + '"],'
-        + 'input[name="eval-r-' + rowKey + '-' + mm + '-card"][value="' + n + '"]';
-      var suffixedRadios = container.querySelectorAll(tableSelector);
-      for (var si = 0; si < suffixedRadios.length; si++) {
-        suffixedRadios[si].checked = true;
-        suffixedRadios[si].setAttribute('checked', 'checked');
-      }
+      var names = [
+        'eval-r-' + rowKey + '-' + mm,
+        'eval-r-' + rowKey + '-' + mm + '-table',
+        'eval-r-' + rowKey + '-' + mm + '-card'
+      ];
+      names.forEach(function(radioName){
+        var group = Array.prototype.slice.call(container.querySelectorAll('input[name="' + radioName + '"]'));
+        if (!group.length) return;
+        group.forEach(function(inp){
+          inp.checked = false;
+          inp.removeAttribute('checked');
+        });
+        if (n === '') return;
+        var matching = group.filter(function(inp){ return Number(inp.value) === n; });
+        if (!matching.length) return;
+        var visible = matching.filter(function(inp){ return inp.offsetParent !== null; });
+        var chosen = visible.length ? visible[visible.length - 1] : matching[0];
+        chosen.checked = true;
+        chosen.setAttribute('checked', 'checked');
+      });
     }
   });
 }
@@ -27911,6 +27917,7 @@ document.addEventListener('DOMContentLoaded', function(){
   window.kpSetParentAccessFields = setFields;
 })();
 </script>
+
 
 
 
