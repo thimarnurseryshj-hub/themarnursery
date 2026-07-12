@@ -19661,9 +19661,9 @@ function kpEvalRadioValue(value){
 }
 function kpEvalNormalizeForReadonlyRender(e){
   var normalized = Object.assign({}, e || {});
-    if (printEval && printEval.skills) {
+  if (e && e.skills) {
     normalized.skills = {};
-      Object.keys(printEval.skills).forEach(function(rowKey){
+    Object.keys(e.skills).forEach(function(rowKey){
       var vals = Array.isArray(e.skills[rowKey]) ? e.skills[rowKey] : [];
       normalized.skills[rowKey] = [
         kpEvalRadioValue(vals[0]),
@@ -27911,6 +27911,7 @@ document.addEventListener('DOMContentLoaded', function(){
   window.kpSetParentAccessFields = setFields;
 })();
 </script>
+
 
 
 
