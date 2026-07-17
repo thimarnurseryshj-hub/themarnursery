@@ -165,7 +165,7 @@ body{
 
 /* 🌟 ترويسة مرحة بألوان متدرجة */
 .hdr{
-  background:linear-gradient(120deg,#e67cac 0%,#3eb377 45%,#5ec38d 100%);
+  background:linear-gradient(120deg,#f07dae 0%,#3eb377 45%,#5ec38d 100%);
   color:#fff;
   min-height:64px;
   display:flex;
@@ -10468,7 +10468,7 @@ function buildFinancialReportPrintHtml(d) {
 <title>التقرير المالي</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
 <style>
-  :root{--g:#8ec141;--g2:#e67cac;--in:#1f8f4d;--out:#d46b08;--neg:#c0392b;--bd:#d9e7d9;--muted:#657565;}
+  :root{--g:#8ec141;--g2:#f07dae;--in:#1f8f4d;--out:#d46b08;--neg:#c0392b;--bd:#d9e7d9;--muted:#657565;}
   *{box-sizing:border-box}
   body{font-family:'Tajawal',Arial,sans-serif;margin:0;background:#f3f6f3;color:#182618}
   .page{max-width:1080px;margin:0 auto;background:#fff;padding:18px 22px 26px}
@@ -19885,7 +19885,7 @@ function kpEvalBuildFormHTML(form, student, editable, savedData, quarterId, lock
           var checked = '';
           if (savedData && savedData.skills) {
             var v = savedData.skills[String(rowIdx)];
-            if (v && Number(v[m]) === lvl) checked = 'checked';
+            if (v && v[m] !== null && v[m] !== undefined && v[m] !== '' && Number(v[m]) === lvl) checked = 'checked';
           }
           cells.push('<td class="' + cellClass + '" style="text-align:center"><input type="radio" name="' + name + '" value="' + lvl + '" ' + dis + ' ' + checked + '/></td>');
         }
@@ -19908,7 +19908,7 @@ function kpEvalBuildFormHTML(form, student, editable, savedData, quarterId, lock
           var ck = '';
           if (savedData && savedData.skills) {
             var cv = savedData.skills[String(rowIdx)];
-            if (cv && Number(cv[cm]) === clvl) ck = 'checked';
+            if (cv && cv[cm] !== null && cv[cm] !== undefined && cv[cm] !== '' && Number(cv[cm]) === clvl) ck = 'checked';
           }
           // Use a <label> wrapping the radio + the level text — gives a big
           // tap target (the whole label) so users do not have to aim at the
@@ -20497,6 +20497,23 @@ window.kpEvalOpenView = function(id){
   var form = KP_FORMS[e.formId] || KP_FORM_AR;
   var body = document.getElementById('mo-eval-view-body');
   body.innerHTML = kpEvalBuildFormHTML(form, stu, /*editable*/ false, /*data*/ e, e.quarter, null, e.academicYear);
+  // Fix: hide mobile cards (they steal radio checked state), clear all, then re-apply real values
+  try {
+    var _cards = body.querySelector('.kp-eval-cards');
+    if (_cards) _cards.style.display = 'none';
+    body.querySelectorAll('table.kp-eval-table input[type="radio"]').forEach(function(r){ r.checked = false; r.removeAttribute('checked'); });
+    if (e && e.skills) {
+      Object.keys(e.skills).forEach(function(rk){
+        var vals = e.skills[rk] || [];
+        for (var mm = 0; mm < 3; mm++) {
+          var vv = vals[mm];
+          if (vv === undefined || vv === null || vv === '') continue;
+          var inp = body.querySelector('table.kp-eval-table input[name="eval-r-' + rk + '-' + mm + '"][value="' + Number(vv) + '"]');
+          if (inp) { inp.checked = true; inp.setAttribute('checked', 'checked'); }
+        }
+      });
+    }
+  } catch(_ve) {}
   // If approved, render the digital stamp(s) into the manager-signature slots,
   // but ONLY for months that were actually evaluated.
   if (e.status === 'approved' && e.stampDataUrl) {
@@ -20580,6 +20597,8 @@ async function kpEvalOpenPrintWindow(id, mode){
   try {
     var cardsForPrint = temp.querySelector('.kp-eval-cards');
     if (cardsForPrint && cardsForPrint.parentNode) cardsForPrint.parentNode.removeChild(cardsForPrint);
+    // Clear ALL checked states first — Number(null)===0 bug marks level-0 on null months
+    temp.querySelectorAll('table.kp-eval-table input[type="radio"]').forEach(function(r){ r.checked = false; r.removeAttribute('checked'); });
     if (e && e.skills) {
       Object.keys(e.skills).forEach(function(rowKey){
         var vals = e.skills[rowKey] || [];
