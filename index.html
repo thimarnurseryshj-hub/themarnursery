@@ -19762,6 +19762,7 @@ function kpEvalRenderForm(){
     }
   }
   host.innerHTML = statusBanner + kpEvalBuildFormHTML(form, s, /*editable*/ true, /*data*/ savedData, quarterId, lockedMonths, academicYear);
+  kpEvalRepairEditableTableSelection(host, savedData);
   // Stash the locked months on the host element so the submit handler can
   // know which months are off-limits even if the user changed quarters mid-flight.
   host.dataset.lockedMonths = JSON.stringify(lockedMonths);
@@ -19779,6 +19780,35 @@ function kpEvalRenderForm(){
 // What this prevents: my earlier pure-CSS approach used fixed 38px/128px
 // offsets, which were wrong on mobile and caused the sticky columns to
 // overlap the radio cells. Measuring the live width fixes that.
+function kpEvalRepairEditableTableSelection(host, savedData){
+  if (!host || !savedData || !savedData.skills) return;
+  var isMobile = false;
+  try { isMobile = !!(window.matchMedia && window.matchMedia('(max-width: 768px)').matches); } catch(_e) {}
+  if (isMobile) return;
+  host.querySelectorAll('.kp-eval-cards.kp-eval-mobile-only').forEach(function(cards){
+    if (cards && cards.parentNode) cards.parentNode.removeChild(cards);
+  });
+  var table = host.querySelector('table.kp-eval-table');
+  if (!table) return;
+  table.querySelectorAll('input[type="radio"]').forEach(function(r){
+    r.checked = false;
+    r.removeAttribute('checked');
+  });
+  Object.keys(savedData.skills || {}).forEach(function(rowKey){
+    var rowNum = parseInt(rowKey, 10);
+    var vals = savedData.skills[rowKey];
+    if (!rowNum || !Array.isArray(vals)) return;
+    for (var mi = 0; mi < 3; mi++) {
+      var val = vals[mi];
+      if (val === null || val === undefined || val === '') continue;
+      var inp = table.querySelector('input[name="eval-r-' + rowNum + '-' + mi + '"][value="' + Number(val) + '"]');
+      if (inp) {
+        inp.checked = true;
+        inp.setAttribute('checked', 'checked');
+      }
+    }
+  });
+}
 function kpEvalApplyStickyOffsets(scopeEl){
   var scope = scopeEl || document;
   var tables = scope.querySelectorAll('.kp-eval-table');
@@ -20196,7 +20226,7 @@ window.kpEvalSubmit = async function(){
       if (managerCanEdit) {
         mergedSkills[k][mm] = incoming[mm];
       } else if (prevSubmittedMonths[mm]) {
-        mergedSkills[k][mm] = prev[mm]; // locked → keep old
+        mergedSkills[k][mm] = kpEvalGetSavedSkillValue(existing, k, mm); // locked → keep old
       } else {
         mergedSkills[k][mm] = incoming[mm];
       }
@@ -20540,10 +20570,10 @@ window.kpEvalOpenView = function(id){
   var form = KP_FORMS[e.formId] || KP_FORM_AR;
   var body = document.getElementById('mo-eval-view-body');
   body.innerHTML = kpEvalBuildFormHTML(form, stu, /*editable*/ false, /*data*/ e, e.quarter, null, e.academicYear);
-  // Fix: hide mobile cards (they steal radio checked state), clear all, then re-apply real values
+  // Fix: remove mobile cards (they share radio names), clear all, then re-apply real values
   try {
     var _cards = body.querySelector('.kp-eval-cards');
-    if (_cards) _cards.style.display = 'none';
+    if (_cards && _cards.parentNode) _cards.parentNode.removeChild(_cards);
     body.querySelectorAll('table.kp-eval-table input[type="radio"]').forEach(function(r){ r.checked = false; r.removeAttribute('checked'); });
     if (e && e.skills) {
       Object.keys(e.skills).forEach(function(rk){
