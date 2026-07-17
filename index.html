@@ -1604,6 +1604,7 @@ body.kp-evaluator #pg-eval{display:block!important}
     <div class="nav" id="nav-deleted" onclick="go('otherdeleted')" style="display:none"><span class="ni">👶</span><span>الطلاب المحذوفون</span><span id="legacy-del-students-nav-badge" class="nav-badge" style="display:none">0</span></div>
     <div class="nav" id="nav-other-deleted" onclick="go('otherdeleted')">    <span class="ni">🗂️</span><span>سلة المحذوفات</span><span id="del-students-nav-badge" class="nav-badge" style="display:none">0</span></div>
     <div class="side-sep"></div>
+    <div class="nav" id="nav-parent-access" onclick="go('parentaccess')" style="display:none"><span class="ni">🔐</span><span>دخول أولياء الأمور</span></div>
     <div class="nav" id="nav-admin" onclick="go('admin')" style="display:none"><span class="ni">⚙️</span><span>الإعدادات</span></div>
   </nav>
 
@@ -10319,6 +10320,9 @@ function _safeSetSlim(key, arr, keyField) {
 function persistCoreDataToLocalStorage() {
   try { localStorage.setItem('kp_classes', JSON.stringify(CLASSES || {})); } catch(_e){}
   try { localStorage.setItem('kp_attendance_locks', JSON.stringify(attendanceLocks || {})); } catch(_e){}
+  try { localStorage.setItem('kp_payments_data', JSON.stringify(sanitizeEntityArray(payments || []))); } catch(_e){}
+  try { localStorage.setItem('kp_expenses_data', JSON.stringify(sanitizeEntityArray(expenses || []))); } catch(_e){}
+  try { localStorage.setItem('kp_renewals_data', JSON.stringify(sanitizeEntityArray(renewals || []))); } catch(_e){}
   // Heavy arrays (students/payments/expenses/renewals/attlog) intentionally skipped — stored in Firebase, not localStorage
 }
 
@@ -10869,6 +10873,43 @@ function mergeClasses(localClasses, remoteClasses, classTombstones) {
   return merged;
 }
 
+function normalizeClassesSection(section) {
+  const out = {};
+  if (!section) return out;
+  function keep(key, value) {
+    key = String(key || '').trim();
+    if (!key) return;
+    if (value == null || value === false) return;
+    if (value && typeof value === 'object') {
+      if (value.deleted === true || value._deleted === true || String(value.status || '').toLowerCase() === 'deleted') return;
+      out[key] = Object.assign({}, value);
+      return;
+    }
+    out[key] = { teacher: String(value || ''), emoji: '' };
+  }
+  if (Array.isArray(section)) {
+    section.forEach(function(item, index) {
+      if (!item) return;
+      if (typeof item === 'object') {
+        keep(item.name || item.className || item.key || item.id || index, item);
+      } else {
+        keep(item, {});
+      }
+    });
+    return out;
+  }
+  if (typeof section === 'object') {
+    Object.keys(section).forEach(function(key){ keep(key, section[key]); });
+  }
+  return out;
+}
+
+function getRemoteClassesFromData(data) {
+  const lower = normalizeClassesSection(data && data.classes);
+  const upper = normalizeClassesSection(data && data.CLASSES);
+  return Object.assign({}, lower, upper);
+}
+
 function mergeDeletedClasses(localArr, remoteArr, classTombstones, currentClasses, restoredArr) {
   const ts = Array.isArray(classTombstones) ? classTombstones : [];
   const restoredSet = new Set((Array.isArray(restoredArr) ? restoredArr : []).map(function(x){ return normKey(x); }));
@@ -11155,7 +11196,7 @@ async function loadFromFirebase() {
     kpNormalizeFirebaseObjectSections(data);
     if (!data) { showSyncBadge('☁️ لا توجد بيانات سحابية'); return; }
     if (!data.version) {
-      const _hasData = data.students || data.payments || data.classes || data.expenses || data.renewals;
+      const _hasData = data.students || data.payments || data.classes || data.CLASSES || data.expenses || data.renewals || data.attLog || data.nurserySettings || data.kp_users || data.deletedPayments || data.deletedExpenses;
       if (!_hasData) { showSyncBadge('☁️ لا توجد بيانات سحابية'); return; }
       data.version = 2;
     }
@@ -11345,7 +11386,8 @@ async function loadFromFirebase() {
       deletedRenewals = Object.values(remoteMap);
       _safeSetSlim('kp_deleted_renewals', deletedRenewals);
     }
-    const mergedRemoteClasses = mergeClasses(CLASSES, data && data.CLASSES, tombstones.classes || []);
+    const remoteClassesForMerge = (typeof getRemoteClassesFromData === 'function') ? getRemoteClassesFromData(data) : (data && data.CLASSES);
+    const mergedRemoteClasses = mergeClasses(CLASSES, remoteClassesForMerge, tombstones.classes || []);
     Object.keys(CLASSES || {}).forEach(function(k){ if (!Object.prototype.hasOwnProperty.call(mergedRemoteClasses, k)) delete CLASSES[k]; });
     Object.assign(CLASSES, mergedRemoteClasses);
     CLASSES_DATA = CLASSES;
@@ -15061,8 +15103,9 @@ document.addEventListener('click', function(e) {
     var data = await readRoot(10000);
     try { if (typeof kpNormalizeFirebaseObjectSections === 'function') kpNormalizeFirebaseObjectSections(data); } catch(_e){}
     Object.keys(ENTITY).forEach(function(type){ reconcileType(type, data); });
-    if (data.CLASSES && typeof data.CLASSES === 'object' && !Array.isArray(data.CLASSES)) {
-      CLASSES = Object.assign({}, data.CLASSES);
+    var remoteClasses = (typeof getRemoteClassesFromData === 'function') ? getRemoteClassesFromData(data) : (data.CLASSES || {});
+    if (remoteClasses && typeof remoteClasses === 'object' && !Array.isArray(remoteClasses) && Object.keys(remoteClasses).length) {
+      CLASSES = Object.assign({}, remoteClasses);
       CLASSES_DATA = CLASSES;
       try { localStorage.setItem('kp_classes', JSON.stringify(CLASSES)); } catch(_e){}
     }
@@ -26914,6 +26957,349 @@ document.addEventListener('DOMContentLoaded', function(){
   async function selected(e){var f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;try{if(typeof showSyncBadge==='function')showSyncBadge('\u062c\u0627\u0631\u064a \u0641\u062d\u0635 \u0645\u0644\u0641 \u0627\u0644\u0645\u062f\u0641\u0648\u0639\u0627\u062a...');preview(await parse(f));if(typeof showSyncBadge==='function')showSyncBadge('\u062a\u0645 \u0641\u062d\u0635 \u0645\u0644\u0641 \u0627\u0644\u0645\u062f\u0641\u0648\u0639\u0627\u062a');}catch(err){alert('\u062a\u0639\u0630\u0631 \u0641\u062d\u0635 \u0645\u0644\u0641 \u0627\u0644\u0645\u062f\u0641\u0648\u0639\u0627\u062a:\n'+(err.message||err));}}
   function install(){if(document.getElementById('kp-clean-payment-button'))return;var normal=document.querySelector('#pg-payments button[onclick*="openImport"]');if(!normal)return;var b=document.createElement('button');b.id='kp-clean-payment-button';b.className='btn btn-b btn-sm';b.textContent='\u267b \u0641\u062d\u0635/\u0627\u0633\u062a\u0628\u062f\u0627\u0644 \u0627\u0644\u062f\u062e\u0644';b.onclick=function(){if(!admin())return alert('\u0644\u0644\u0645\u062f\u064a\u0631 \u0641\u0642\u0637');document.getElementById('kp-clean-payment-file').click();};normal.insertAdjacentElement('afterend',b);var i=document.createElement('input');i.id='kp-clean-payment-file';i.type='file';i.accept='.xlsx,.xls';i.style.display='none';i.onchange=selected;document.body.appendChild(i);setInterval(function(){b.style.display=admin()?'':'none';},1000);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
+})();
+</script>
+
+<script id="kp-payment-load-rescue-20260717">
+(function(){
+  'use strict';
+  function kpPaymentArrayFromSection(value) {
+    if (typeof kpArrayFromFirebaseSection === 'function') return kpArrayFromFirebaseSection(value);
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (value && typeof value === 'object') {
+      return Object.keys(value).map(function(key){
+        var row = value[key];
+        if (row && typeof row === 'object' && row.id == null) row.id = key;
+        return row;
+      }).filter(Boolean);
+    }
+    return [];
+  }
+  async function kpFetchPaymentsOnly() {
+    var base = (typeof FB_URL !== 'undefined' && FB_URL) ? FB_URL : window.FB_URL;
+    if (!base) return [];
+    var res = await fetch(base.replace(/\/$/, '') + '/payments.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return kpPaymentArrayFromSection(await res.json());
+  }
+  async function kpEnsurePaymentsLoadedFromFirebase() {
+    if (typeof currentUser === 'undefined' || !currentUser) return false;
+    if (Array.isArray(payments) && payments.length) return true;
+    try {
+      var remotePayments = await kpFetchPaymentsOnly();
+      if (!remotePayments.length) return false;
+      if (typeof deletedPayments !== 'undefined' && typeof tombstones !== 'undefined' && typeof mergeArrayById === 'function') {
+        payments = mergeArrayById(payments || [], remotePayments, tombstones.payments || [], deletedPayments || []);
+      } else {
+        payments = remotePayments;
+      }
+      payments = (typeof sanitizeEntityArray === 'function') ? sanitizeEntityArray(payments) : payments.filter(Boolean);
+      try { localStorage.setItem('kp_payments_data', JSON.stringify(payments)); } catch(_e) {}
+      if (typeof resetPaymentMatchCache === 'function') resetPaymentMatchCache();
+      if (typeof refreshNextIds === 'function') refreshNextIds();
+      if (typeof renderPayments === 'function') renderPayments();
+      if (typeof renderReceipts === 'function') renderReceipts();
+      if (typeof renderDash === 'function') renderDash();
+      return true;
+    } catch (err) {
+      console.warn('[payments] fallback payment load failed', err);
+      return false;
+    }
+  }
+  var previousLoadFromFirebase = window.loadFromFirebase || (typeof loadFromFirebase === 'function' ? loadFromFirebase : null);
+  if (previousLoadFromFirebase && !previousLoadFromFirebase.__kpPaymentRescueWrapped) {
+    var wrappedLoadFromFirebase = async function() {
+      var result = await previousLoadFromFirebase.apply(this, arguments);
+      await kpEnsurePaymentsLoadedFromFirebase();
+      return result;
+    };
+    wrappedLoadFromFirebase.__kpPaymentRescueWrapped = true;
+    window.loadFromFirebase = wrappedLoadFromFirebase;
+    try { loadFromFirebase = wrappedLoadFromFirebase; } catch(_e) {}
+  }
+  window.kpEnsurePaymentsLoadedFromFirebase = kpEnsurePaymentsLoadedFromFirebase;
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(kpEnsurePaymentsLoadedFromFirebase, 1800); });
+  } else {
+    setTimeout(kpEnsurePaymentsLoadedFromFirebase, 1800);
+  }
+})();
+</script>
+
+<script id="kp-class-load-rescue-20260717">
+(function(){
+  'use strict';
+  function baseUrl() {
+    var base = (typeof FB_URL !== 'undefined' && FB_URL) ? FB_URL : window.FB_URL;
+    return base ? String(base).replace(/\/$/, '') : '';
+  }
+  function normalize(section) {
+    if (typeof normalizeClassesSection === 'function') return normalizeClassesSection(section);
+    var out = {};
+    if (!section) return out;
+    function keep(key, value) {
+      key = String(key || '').trim();
+      if (!key || value == null || value === false) return;
+      if (value && typeof value === 'object') {
+        if (value.deleted === true || value._deleted === true || String(value.status || '').toLowerCase() === 'deleted') return;
+        out[key] = Object.assign({}, value);
+      } else {
+        out[key] = { teacher: String(value || ''), emoji: '' };
+      }
+    }
+    if (Array.isArray(section)) {
+      section.forEach(function(item, index){
+        if (!item) return;
+        if (typeof item === 'object') keep(item.name || item.className || item.key || item.id || index, item);
+        else keep(item, {});
+      });
+    } else if (typeof section === 'object') {
+      Object.keys(section).forEach(function(key){ keep(key, section[key]); });
+    }
+    return out;
+  }
+  async function read(path) {
+    var base = baseUrl();
+    if (!base) return null;
+    var res = await fetch(base + '/' + path + '.json', { cache: 'no-store' });
+    if (!res.ok) return null;
+    return await res.json();
+  }
+  async function kpEnsureClassesLoadedFromFirebase() {
+    if (typeof currentUser === 'undefined' || !currentUser) return false;
+    try {
+      var sections = await Promise.all([read('classes'), read('CLASSES')]);
+      var remoteClasses = Object.assign({}, normalize(sections[0]), normalize(sections[1]));
+      var tombs = (typeof tombstones !== 'undefined' && tombstones && Array.isArray(tombstones.classes)) ? tombstones.classes : [];
+      tombs.forEach(function(key){ if (Object.prototype.hasOwnProperty.call(remoteClasses, key)) delete remoteClasses[key]; });
+      if (!Object.keys(remoteClasses).length) return false;
+      Object.keys(CLASSES || {}).forEach(function(key){ if (!Object.prototype.hasOwnProperty.call(remoteClasses, key)) delete CLASSES[key]; });
+      Object.assign(CLASSES, remoteClasses);
+      CLASSES_DATA = CLASSES;
+      try { localStorage.setItem('kp_classes', JSON.stringify(CLASSES)); } catch(_e) {}
+      try { if (typeof populateClassDropdowns === 'function') populateClassDropdowns(); } catch(_e) {}
+      try { if (typeof renderAdminClasses === 'function') renderAdminClasses(); } catch(_e) {}
+      try { if (typeof fillClassFilters === 'function') fillClassFilters(); } catch(_e) {}
+      try { if (typeof renderStudents === 'function') renderStudents(); } catch(_e) {}
+      try { if (typeof renderDash === 'function') renderDash(); } catch(_e) {}
+      return true;
+    } catch (err) {
+      console.warn('[classes] fallback class load failed', err);
+      return false;
+    }
+  }
+  var previousLoadFromFirebase = window.loadFromFirebase || (typeof loadFromFirebase === 'function' ? loadFromFirebase : null);
+  if (previousLoadFromFirebase && !previousLoadFromFirebase.__kpClassRescueWrapped) {
+    var wrappedLoadFromFirebase = async function() {
+      var result = await previousLoadFromFirebase.apply(this, arguments);
+      await kpEnsureClassesLoadedFromFirebase();
+      return result;
+    };
+    wrappedLoadFromFirebase.__kpClassRescueWrapped = true;
+    window.loadFromFirebase = wrappedLoadFromFirebase;
+    try { loadFromFirebase = wrappedLoadFromFirebase; } catch(_e) {}
+  }
+  window.kpEnsureClassesLoadedFromFirebase = kpEnsureClassesLoadedFromFirebase;
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(kpEnsureClassesLoadedFromFirebase, 1800); });
+  } else {
+    setTimeout(kpEnsureClassesLoadedFromFirebase, 1800);
+  }
+})();
+</script>
+
+<script id="kp-parent-access-admin-20260717">
+(function(){
+  'use strict';
+  var accounts = {};
+  function text(value) { return String(value == null ? '' : value); }
+  function html(value) { return text(value).replace(/[&<>"']/g, function(ch){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[ch]; }); }
+  function baseUrl() {
+    var base = (typeof FB_URL !== 'undefined' && FB_URL) ? FB_URL : window.FB_URL;
+    return base ? String(base).replace(/\/$/, '') : '';
+  }
+  function emailKey(email) { return text(email).trim().toLowerCase().replace(/[.#$\[\]\/@]/g, '_'); }
+  function isAdminUser() {
+    try {
+      var role = String((currentUser && currentUser.role) || '').toLowerCase();
+      var username = String((currentUser && currentUser.username) || '').toLowerCase();
+      return !!currentUser && (role === 'admin' || role === 'manager' || role === 'director' || username === 'admin');
+    } catch(_e) { return false; }
+  }
+  function allStudents() {
+    try {
+      if (Array.isArray(window.students)) return window.students;
+      if (typeof students !== 'undefined' && Array.isArray(students)) return students;
+    } catch(_e) {}
+    return [];
+  }
+  function studentName(student) {
+    return text(student.name || student.childName || student.studentName || student.nameAr || student.fullName || student.nameEn || student.englishName || ('#' + (student.id || ''))).trim() || '-';
+  }
+  function emailMatchesStudent(email, student) {
+    var target = text(email).trim().toLowerCase();
+    if (!target) return false;
+    var fields = [
+      student.email, student.parentEmail, student.guardianEmail,
+      student.dadEmail, student.fatherEmail, student.parent1Email,
+      student.momEmail, student.motherEmail, student.parent2Email
+    ];
+    return fields.some(function(value){ return text(value).trim().toLowerCase() === target; });
+  }
+  function studentNamesForEmail(email) {
+    var names = [];
+    allStudents().forEach(function(student){
+      if (emailMatchesStudent(email, student)) names.push(studentName(student));
+    });
+    names = names.filter(function(name, index){ return name && name !== '-' && names.indexOf(name) === index; });
+    return names.length ? names.join('، ') : '-';
+  }
+  function syncNavVisibility() {
+    var nav = document.getElementById('nav-parent-access');
+    if (nav) nav.style.display = isAdminUser() ? 'flex' : 'none';
+  }
+  function notify(message, error) {
+    var el = document.getElementById('kp-parent-access-msg');
+    if (el) {
+      el.textContent = message;
+      el.style.color = error ? '#d63a3a' : '#0e6b35';
+    }
+    try { if (typeof showSyncBadge === 'function') showSyncBadge(message); } catch(_e) {}
+  }
+  async function request(path, options) {
+    var base = baseUrl();
+    if (!base) throw new Error('Firebase URL is missing');
+    var res = await fetch(base + '/parentAccounts' + path + '.json', options || { cache:'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  }
+  function render() {
+    var body = document.getElementById('kp-parent-access-body');
+    var count = document.getElementById('kp-parent-access-count');
+    if (!body) return;
+    var keys = Object.keys(accounts || {}).sort();
+    if (count) count.textContent = String(keys.length);
+    body.innerHTML = keys.map(function(key){
+      var account = accounts[key] || {};
+      var enabled = account.enabled !== false;
+      return '<tr>'
+        + '<td dir="ltr">' + html(account.email || key) + '</td>'
+        + '<td>' + html(studentNamesForEmail(account.email || key)) + '</td>'
+        + '<td><span class="kp-user-badge ' + (enabled ? 'active' : 'disabled') + '">' + (enabled ? '\u0645\u0641\u0639\u0651\u0644' : '\u0645\u0648\u0642\u0648\u0641') + '</span></td>'
+        + '<td style="display:flex;gap:6px;flex-wrap:wrap">'
+        + '<button class="btn btn-b btn-sm" onclick="kpEditParentAccount(' + JSON.stringify(key).replace(/"/g,'&quot;') + ')">\u062a\u0639\u062f\u064a\u0644</button>'
+        + '<button class="btn ' + (enabled ? 'btn-y' : 'btn-g') + ' btn-sm" onclick="kpToggleParentAccount(' + JSON.stringify(key).replace(/"/g,'&quot;') + ')">' + (enabled ? '\u0625\u064a\u0642\u0627\u0641' : '\u062a\u0641\u0639\u064a\u0644') + '</button>'
+        + '<button class="btn btn-r btn-sm" onclick="kpDeleteParentAccount(' + JSON.stringify(key).replace(/"/g,'&quot;') + ')">\u062d\u0630\u0641</button>'
+        + '</td></tr>';
+    }).join('') || '<tr><td colspan="4" style="color:var(--muted);text-align:center">\u0644\u0627 \u062a\u0648\u062c\u062f \u062d\u0633\u0627\u0628\u0627\u062a \u062d\u0627\u0644\u064a\u0627\u064b</td></tr>';
+  }
+  async function load() {
+    if (!isAdminUser()) return;
+    try {
+      accounts = await request('', { cache:'no-store' }) || {};
+      render();
+    } catch (err) {
+      accounts = {};
+      render();
+      notify('\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u062d\u0633\u0627\u0628\u0627\u062a \u0623\u0648\u0644\u064a\u0627\u0621 \u0627\u0644\u0623\u0645\u0648\u0631', true);
+    }
+  }
+  async function save() {
+    if (!isAdminUser()) return alert('\u0644\u0644\u0645\u062f\u064a\u0631 \u0641\u0642\u0637');
+    var email = text((document.getElementById('kp-parent-email') || {}).value).trim().toLowerCase();
+    var password = text((document.getElementById('kp-parent-password') || {}).value);
+    var enabled = !!((document.getElementById('kp-parent-enabled') || {}).checked);
+    if (!email) return notify('\u0623\u062f\u062e\u0644\u064a \u0625\u064a\u0645\u064a\u0644 \u0648\u0644\u064a \u0627\u0644\u0623\u0645\u0631', true);
+    if (!password) return notify('\u0623\u062f\u062e\u0644\u064a \u0643\u0644\u0645\u0629 \u0645\u0631\u0648\u0631 \u0648\u0644\u064a \u0627\u0644\u0623\u0645\u0631', true);
+    var key = emailKey(email);
+    try {
+      await request('/' + key, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ email:email, password:password, enabled:enabled, updatedAt:new Date().toISOString() }) });
+      document.getElementById('kp-parent-email').value = '';
+      document.getElementById('kp-parent-password').value = '';
+      document.getElementById('kp-parent-enabled').checked = true;
+      notify('\u062a\u0645 \u062d\u0641\u0638 \u062d\u0633\u0627\u0628 \u0648\u0644\u064a \u0627\u0644\u0623\u0645\u0631');
+      await load();
+    } catch (err) {
+      notify('\u062a\u0639\u0630\u0631 \u062d\u0641\u0638 \u062d\u0633\u0627\u0628 \u0648\u0644\u064a \u0627\u0644\u0623\u0645\u0631', true);
+    }
+  }
+  window.kpEditParentAccount = function(key) {
+    var account = accounts[key] || {};
+    document.getElementById('kp-parent-email').value = account.email || key;
+    document.getElementById('kp-parent-password').value = account.password || '';
+    document.getElementById('kp-parent-enabled').checked = account.enabled !== false;
+  };
+  window.kpToggleParentAccount = async function(key) {
+    if (!isAdminUser()) return alert('\u0644\u0644\u0645\u062f\u064a\u0631 \u0641\u0642\u0637');
+    var enabled = accounts[key] && accounts[key].enabled === false;
+    await request('/' + key + '/enabled', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(enabled) });
+    await load();
+  };
+  window.kpDeleteParentAccount = async function(key) {
+    if (!isAdminUser()) return alert('\u0644\u0644\u0645\u062f\u064a\u0631 \u0641\u0642\u0637');
+    if (!(await window.kpConfirmAsync(null, null, '\u062d\u0630\u0641 \u062d\u0633\u0627\u0628 \u0648\u0644\u064a \u0627\u0644\u0623\u0645\u0631\u061f'))) return;
+    await request('/' + key, { method:'DELETE' });
+    await load();
+  };
+  function install() {
+    syncNavVisibility();
+    if (!isAdminUser()) return null;
+    var page = document.getElementById('pg-parent-access');
+    if (page) return page;
+    var main = document.querySelector('.main');
+    if (!main) return null;
+    page = document.createElement('div');
+    page.className = 'pg';
+    page.id = 'pg-parent-access';
+    page.innerHTML =
+      '<div class="pt">\ud83d\udd10 \u062f\u062e\u0648\u0644 \u0623\u0648\u0644\u064a\u0627\u0621 \u0627\u0644\u0623\u0645\u0648\u0631</div>'
+      + '<div class="card" id="kp-parent-access-admin">'
+      + '<h3>\ud83d\udd10 \u0625\u062f\u0627\u0631\u0629 \u062f\u062e\u0648\u0644 \u0623\u0648\u0644\u064a\u0627\u0621 \u0627\u0644\u0623\u0645\u0648\u0631</h3>'
+      + '<div style="color:var(--muted);font-size:12px;margin-bottom:10px">\u0623\u0636\u064a\u0641\u064a \u0625\u064a\u0645\u064a\u0644 \u0648\u0643\u0644\u0645\u0629 \u0645\u0631\u0648\u0631 \u0648\u0641\u0639\u0651\u0644\u064a \u0623\u0648 \u0623\u0648\u0642\u0641\u064a \u0648\u0635\u0648\u0644 \u0648\u0644\u064a \u0627\u0644\u0623\u0645\u0631. \u0633\u064a\u0638\u0647\u0631 \u0627\u0633\u0645 \u0627\u0644\u0637\u0627\u0644\u0628 \u062a\u0644\u0642\u0627\u0626\u064a\u0627\u064b \u0639\u0646\u062f \u0645\u0637\u0627\u0628\u0642\u0629 \u0627\u0644\u0625\u064a\u0645\u064a\u0644 \u0645\u0639 \u0645\u0644\u0641 \u0627\u0644\u0637\u0627\u0644\u0628.</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end">'
+      + '<div class="fl"><label>\u0625\u064a\u0645\u064a\u0644 \u0648\u0644\u064a \u0627\u0644\u0623\u0645\u0631</label><input id="kp-parent-email" dir="ltr" type="email" placeholder="parent@email.com"></div>'
+      + '<div class="fl"><label>\u0643\u0644\u0645\u0629 \u0645\u0631\u0648\u0631 \u0648\u0644\u064a \u0627\u0644\u0623\u0645\u0631</label><input id="kp-parent-password" dir="ltr" type="text" placeholder="Password"></div>'
+      + '<label style="display:flex;gap:8px;align-items:center;font-weight:800;color:var(--text);padding-bottom:10px"><input id="kp-parent-enabled" type="checkbox" checked style="width:auto">\u0645\u0641\u0639\u0651\u0644</label>'
+      + '</div>'
+      + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0"><button class="btn btn-g btn-sm" onclick="kpSaveParentAccount()">\ud83d\udcbe \u062d\u0641\u0638 \u0627\u0644\u062d\u0633\u0627\u0628</button><button class="btn btn-out btn-sm" onclick="kpLoadParentAccounts()">\ud83d\udd04 \u062a\u062d\u062f\u064a\u062b</button><span id="kp-parent-access-msg" style="font-size:12px;font-weight:800"></span><span style="margin-inline-start:auto;color:var(--muted);font-size:12px">\u0627\u0644\u062d\u0633\u0627\u0628\u0627\u062a: <b id="kp-parent-access-count">0</b></span></div>'
+      + '<div style="overflow:auto"><table class="tbl" style="font-size:13px"><thead><tr><th>\u0627\u0644\u0625\u064a\u0645\u064a\u0644</th><th>\u0627\u0644\u0637\u0627\u0644\u0628</th><th>\u0627\u0644\u062d\u0627\u0644\u0629</th><th>\u0625\u062c\u0631\u0627\u0621\u0627\u062a</th></tr></thead><tbody id="kp-parent-access-body"><tr><td colspan="4" style="text-align:center;color:var(--muted)">\u062c\u0627\u0631\u064a \u0627\u0644\u062a\u062d\u0645\u064a\u0644...</td></tr></tbody></table></div>'
+      + '</div>';
+    main.appendChild(page);
+    return page;
+  }
+  window.kpLoadParentAccounts = load;
+  window.kpSaveParentAccount = save;
+  window.kpOpenParentAccessManager = function() {
+    if (!isAdminUser()) return alert('\u0644\u0644\u0645\u062f\u064a\u0631 \u0641\u0642\u0637');
+    var page = install();
+    if (!page) return;
+    document.querySelectorAll('.pg').forEach(function(p){ p.classList.remove('on'); });
+    page.classList.add('on');
+    document.querySelectorAll('.side .nav').forEach(function(n){ n.classList.remove('on'); });
+    var nav = document.getElementById('nav-parent-access');
+    if (nav) nav.classList.add('on');
+    load();
+  };
+  function installSoon() {
+    setTimeout(function(){ install(); }, 80);
+  }
+  var previousGo = window.go || (typeof go === 'function' ? go : null);
+  if (previousGo && !previousGo.__kpParentAccessWrapped) {
+    var wrappedGo = function(page) {
+      if (page === 'parentaccess') {
+        window.kpOpenParentAccessManager();
+        return;
+      }
+      var result = previousGo.apply(this, arguments);
+      syncNavVisibility();
+      return result;
+    };
+    wrappedGo.__kpParentAccessWrapped = true;
+    window.go = wrappedGo;
+    try { go = wrappedGo; } catch(_e) {}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(installSoon, 1200); });
+  else setTimeout(installSoon, 1200);
 })();
 </script>
 
