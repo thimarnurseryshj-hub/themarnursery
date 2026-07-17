@@ -3158,9 +3158,9 @@ function mergeStudentRecordSafely(localItem, remoteItem) {
   return output;
 }
 
-var nextStuId = 200;
+var nextStuId = 1;
 var nextPayId = 1;
-var nextExpId = 600;
+var nextExpId = 1;
 var nextRenId = 51;
 
 function getSafeNextReceiptId() {
@@ -3362,9 +3362,9 @@ function getSafeNextExpenseId(){
     const localTs = JSON.parse(localStorage.getItem('kp_tombstones') || '{}');
     addUsedFromArray(localTs && localTs.expenses);
   } catch(_) {}
-  let maxId = 599;
+  let maxId = 0;
   usedIds.forEach(function(id){ if (id > maxId) maxId = id; });
-  let candidate = Math.max(600, maxId + 1);
+  let candidate = Math.max(1, maxId + 1);
   while (usedIds.has(candidate)) candidate++;
   return candidate;
 }
@@ -3399,7 +3399,7 @@ function getSafeNextStudentId(extraUsedIds) {
     collectStudentUsedIds(localTombstones && localTombstones.students, usedIds);
   } catch(_) {}
 
-  let candidate = 200;
+  let candidate = 1;
   while (usedIds.has(candidate)) candidate++;
   return candidate;
 }
@@ -3503,9 +3503,9 @@ async function getSafeNextExpenseIdRemoteAware() {
       addUsedFromArray(data && data.tombstones && data.tombstones.expenses);
     }
   } catch(_) {}
-  let maxId = 599;
+  let maxId = 0;
   usedIds.forEach(function(id){ if (id > maxId) maxId = id; });
-  let candidate = Math.max(600, maxId + 1);
+  let candidate = Math.max(1, maxId + 1);
   while (usedIds.has(candidate)) candidate++;
   return candidate;
 }
@@ -16913,7 +16913,7 @@ document.addEventListener('click', function(e) {
     ensureConfirmEnglish();
     var open=document.getElementById('kp-date-review-overlay');
     if(open && open.classList.contains('on')) window.openFinanceDateReview();
-  }, 200);
+  }, 1);
 })();
 </script>
 
@@ -26366,7 +26366,7 @@ document.addEventListener('DOMContentLoaded', function(){
     try { getSafeNextReceiptIdRemoteAware = window.getSafeNextReceiptIdRemoteAware; } catch(_e) {}
 
     window.getSafeNextStudentIdRemoteAware = async function(){
-      return remoteIdsFor('students', 'deletedStudents', 'tombstones/students', window.students || (typeof students !== 'undefined' ? students : []), window.deletedStudents || (typeof deletedStudents !== 'undefined' ? deletedStudents : []), 200);
+      return remoteIdsFor('students', 'deletedStudents', 'tombstones/students', window.students || (typeof students !== 'undefined' ? students : []), window.deletedStudents || (typeof deletedStudents !== 'undefined' ? deletedStudents : []), 1);
     };
     try { getSafeNextStudentIdRemoteAware = window.getSafeNextStudentIdRemoteAware; } catch(_e) {}
 
